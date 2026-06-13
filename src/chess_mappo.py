@@ -1,19 +1,33 @@
+
 from pettingzoo.classic import chess_v6
 
+class Agent:
+    def __init__(self, hyperparameter_set):
+        pass
+
+    def collect_rollout(self):
+        pass
+
+    def train(self):
+        pass
+
+    def optimize(self):
+        pass
+
+    def run(self):
+        pass
+
+    def save_graph(self):
+        # do this if its possible to graph elo over time
+        pass
+
+    def _log(self, message):
+        pass
+
+
+
+def main():
+    pass
+
 if __name__ == '__main__':
-    env = chess_v6.env(render_mode="human")
-    env.reset(seed=42)
-
-    for agent in env.agent_iter():
-        observation, reward, termination, truncation, info = env.last()
-
-        if termination or truncation:
-            action = None
-        else:
-            assert observation is not None
-            mask = observation["action_mask"]
-            # this is where you would insert your policy
-            action = env.action_space(agent).sample(mask)
-
-        env.step(action)
-    env.close()
+    pass
