@@ -1,6 +1,4 @@
 
-from typing import Any
-
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
@@ -79,6 +77,22 @@ class ActorCritic(nn.Module):
         log_prob = dist.log_prob(action)
 
         return (action.item(), log_prob, value)
+    
+    def evaluate_actions(self, states, actions):
+        # Re-score the picks from select action
+
+        states_t = torch.as_tensor(states, dtype=torch.float32)
+
+        logits, values = self(states_t)
+
+        dist = Categorical(logits=logits)
+
+        # we don't need to find actions because we are just rescoring the past action
+        new_log_probs = dist.log_prob(torch.as_tensor(actions, dtype=torch.long))
+
+        entropy = dist.entropy()
+
+        return (new_log_probs, entropy, values)
     
 def compute_gae(rewards, values, dones, last_value, gamma, gae_lambda):
     advantages = []
