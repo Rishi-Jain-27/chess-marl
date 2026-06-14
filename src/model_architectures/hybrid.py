@@ -55,12 +55,12 @@ class ActorCritic(nn.Module):
     def forward(self, x, action_mask):
         x = x.permute(0, 3, 1, 2) # turns into (b, 111, 8, 8)
         x = self.conv_layer(x) # (b, 111, 8, 8) -> (b, 64, 8, 8)
-        x = x.flatten(2, 3) # (b, 111, 8, 8) -> (b, 64, 64)
+        x = x.flatten(2, 3).permute(0, 2, 1) # (b, 111, 8, 8) -> (b, 64 (seq), 64 (features)) -> (b, 64 (features), 64 (seq))
         x = x + self.positional_embedding
         x = self.transformer_encoder(x)
         logits = self.actor_head(x)
-        logits = logits.masked_fill(torch.tensor(action_mask == 0), -1e9)
-        return (logits, self.critic_head(x))
+        logits = logits.masked_fill(torch.tensor(action_mask == 0, device=logits.device), -1e9)
+        return (logits, self.critic_head(x).squeeze(-1))
     
     def select_action(self, state, action_mask):
         state_t = torch.as_tensor(state, dtype=torch.float32)

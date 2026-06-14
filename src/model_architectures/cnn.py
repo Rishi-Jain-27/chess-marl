@@ -63,7 +63,7 @@ class ActorCritic(nn.Module):
 
         x = self.conv_layer(x)
         logits = self.actor_head(x)
-        logits = logits.masked_fill(torch.tensor(action_mask == 0), -1e9) # 0 is illegal so this nukes the prob of illegal actions
+        logits = logits.masked_fill(torch.tensor(action_mask == 0, device=logits.device), -1e9) # 0 is illegal so this nukes the prob of illegal actions
 
         # squeeze to turn (batch_size, 1) to (batch_size)
         return (logits, self.critic_head(x).squeeze(-1))
