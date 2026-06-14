@@ -1,5 +1,4 @@
 from src.model_architectures.cnn import ActorCritic, compute_gae
-from gymnasium.spaces import Discrete
 import torch
 
 if __name__ == '__main__':

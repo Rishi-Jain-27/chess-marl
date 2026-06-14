@@ -21,7 +21,7 @@ class ActorCritic(nn.Module):
             d_model=64, 
             nhead=8, 
             dim_feedforward=hidden_dim,
-            activation='silu',
+            activation='gelu',
             batch_first=True
         )
         self.positional_embedding = nn.Parameter(torch.zeros(1, 64, 64))

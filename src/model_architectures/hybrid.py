@@ -25,7 +25,7 @@ class ActorCritic(nn.Module):
             d_model=64, 
             nhead=8, 
             dim_feedforward=hidden_dim,
-            activation='silu',
+            activation='gelu',
             batch_first=True
         )
         self.positional_embedding = nn.Parameter(torch.zeros(1, 64, 64))
@@ -53,8 +53,9 @@ class ActorCritic(nn.Module):
         """
     
     def forward(self, x, action_mask):
-        x = x.flatten(1, 2) # (b, 8, 8, 111) -> (b, 64, 111)
-        x = self.conv_layer(x) # (b, 64, 111) -> (b, 64, 64)
+        x = x.permute(0, 3, 1, 2) # turns into (b, 111, 8, 8)
+        x = self.conv_layer(x) # (b, 111, 8, 8) -> (b, 64, 8, 8)
+        x = x.flatten(2, 3) # (b, 111, 8, 8) -> (b, 64, 64)
         x = x + self.positional_embedding
         x = self.transformer_encoder(x)
         logits = self.actor_head(x)
