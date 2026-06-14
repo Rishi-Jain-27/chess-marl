@@ -58,7 +58,7 @@ class ActorCritic(nn.Module):
         x = x + self.positional_embedding
         x = self.transformer_encoder(x)
         logits = self.actor_head(x)
-        logits = torch.masked_fill(logits, action_mask == 0, 1e-9)
+        logits = logits.masked_fill(torch.tensor(action_mask == 0), -1e9)
         return (logits, self.critic_head(x))
     
     def select_action(self, state, action_mask):
@@ -88,7 +88,7 @@ def compute_gae(rewards, values, dones, last_value, gamma, gae_lambda):
         gae = delta + gamma * gae_lambda * mask * gae
         advantages.insert(0, gae)
     advantages = torch.as_tensor(advantages, dtype=torch.float32)
-    values_t = torch.as_tensor(values, dtype=torch.float32)
+    values_t = torch.as_tensor(values[:-1], dtype=torch.float32)
     returns = advantages + values_t
     advantages = (advantages - advantages.mean())/(advantages.std() + 1e-9) # normalize
     return (advantages, returns)

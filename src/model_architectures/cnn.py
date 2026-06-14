@@ -63,7 +63,7 @@ class ActorCritic(nn.Module):
 
         x = self.conv_layer(x)
         logits = self.actor_head(x)
-        logits = logits.masked_fill(action_mask == 0, -1e9) # 0 is illegal so this nukes the prob of illegal actions
+        logits = logits.masked_fill(torch.tensor(action_mask == 0), -1e9) # 0 is illegal so this nukes the prob of illegal actions
 
         # squeeze to turn (batch_size, 1) to (batch_size)
         return (logits, self.critic_head(x).squeeze(-1))
@@ -105,12 +105,12 @@ def compute_gae(rewards, values, dones, last_value, gamma, gae_lambda):
 
     for t in reversed(range(len(rewards))): # this goes backwards thru time
         mask = 1.0 - float(dones[t]) # if dones[t] is true, mask zeros delta & gae
-        delta = rewards[t] + gamma * values[t + 1] * mask - values[t]
+        delta = rewards[t] + (gamma * values[t + 1] * mask) - values[t]
         gae = delta + gamma * gae_lambda * mask * gae # gae recursion
         advantages.insert(0, gae) # prepend bc iterating backwards
     
     advantages = torch.as_tensor(advantages, dtype=torch.float32)
-    values_t = torch.as_tensor(values, dtype=torch.float32)
+    values_t = torch.as_tensor(values[:-1], dtype=torch.float32) # don't include the values[t + 1] val
 
     returns = advantages + values_t
     
