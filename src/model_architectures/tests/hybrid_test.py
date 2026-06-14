@@ -1,7 +1,7 @@
 from src.model_architectures.hybrid import ActorCritic, compute_gae
 import torch
 
-# Stole this from cnn.py, should be fine
+# Stole this from cnn_test.py, should be fine
 if __name__ == '__main__':
     # Test model init
     test_model = ActorCritic((8, 8, 111), 4672)
