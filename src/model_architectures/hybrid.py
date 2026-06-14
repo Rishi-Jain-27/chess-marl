@@ -9,13 +9,57 @@ conv -> transformer -> a/c heads
 """
 
 class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_dim) -> None:
+    def __init__(self, state_dim, action_dim, hidden_dim=256) -> None:
         super().__init__()
         
-        pass
+        self.conv_layer = nn.Sequential(
+            nn.Conv2d(state_dim[-1], # features = 111
+                      64,
+                      kernel_size=(3, 3),
+                      stride=1,
+                      padding=1),
+            nn.SiLU()
+        )
+
+        self.encoder_layer = nn.TransformerEncoderLayer(
+            d_model=64, 
+            nhead=8, 
+            dim_feedforward=hidden_dim,
+            activation='silu',
+            batch_first=True
+        )
+        self.positional_embedding = nn.Parameter(torch.zeros(1, 64, 64))
+        
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer=self.encoder_layer,
+                                                         num_layers=2)
+        
+        self.actor_head = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(64 * 64, action_dim)
+        )
+
+        self.critic_head = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(64 * 64, 1)
+        )
+
+        """
+        Here the tensors flow like:
+        (b, 8, 8, 111)
+        (b, 8, 8, 64)
+        (b, 64, 64) -- this is a flatten in forward for (1, 2)
+        (b, 64 * 64)
+        (b, action_dim OR 1)
+        """
     
     def forward(self, x, action_mask):
-        pass
+        x = x.flatten(1, 2) # (b, 8, 8, 111) -> (b, 64, 111)
+        x = self.conv_layer(x) # (b, 64, 111) -> (b, 64, 64)
+        x = x + self.positional_embedding
+        x = self.transformer_encoder(x)
+        logits = self.actor_head(x)
+        logits = torch.masked_fill(logits, action_mask == 0, 1e-9)
+        return (logits, self.critic_head(x))
     
     def select_action(self, state, action_mask):
         state_t = torch.as_tensor(state, dtype=torch.float32)

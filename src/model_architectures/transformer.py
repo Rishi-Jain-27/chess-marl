@@ -10,7 +10,7 @@ kinda makes sense
 """
 
 class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_dim) -> None:
+    def __init__(self, state_dim, action_dim, hidden_dim=256) -> None:
         super().__init__()
         
         # convert 111 features to the 64 dmodel (hardcoded)

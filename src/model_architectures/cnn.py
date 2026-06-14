@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.distributions import Categorical
 
 class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_dim) -> None:
+    def __init__(self, state_dim, action_dim, hidden_dim=256) -> None:
         super().__init__()
 
         """
