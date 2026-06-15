@@ -216,6 +216,8 @@ class Agent:
         # start collecting metrics
         num_steps = 0
         best_elo = float('-inf')
+        network_elos = []
+        network_elo_step_computed = []
 
         # begin logging
         start_time = datetime.now()
@@ -239,20 +241,37 @@ class Agent:
             # Metrics
             num_steps += len(actions)
 
+            if num_steps >= self.steps_per_save:
+                # Find network elo
+                network_elo = self.compute_elo(network)
+
+                # Add that to list
+                network_elos.append(network_elo)
+                network_elo_step_computed.append(num_steps)
+
+                # Graph it
+                self.save_graph(network_elos, network_elo_step_computed)
+
+                # Save permanently
+
+
+                # Update best elo
+                assert network_elo is not None # these asserts are so pylance doesn't go insane
+                assert best_elo is not None
+                if network_elo > best_elo:
+                    best_elo = network_elo
             """
             To do:
             create the elo tracking thing
             i dont think bestmean reward or rewards per episode and all are very helpful
 
-            Compute elo and note the step elo was computed at
-            graph it
             if numsteps >= steps per save then:
+                Compute elo and note the step elo was computed at
+                graph it
                 save permanently the model if the elo of the model is 100 greater than the previous best elo
                 implement checkpointing logic to make it so the model does NOT overwrite
 
             """
-            pass
-        pass
 
     def optimize(self, network, optimizer, observations, actions, masks, old_log_probs, advantages, returns):
         """
@@ -296,7 +315,7 @@ class Agent:
                 optimizer.step()
 
     # this computes ELO scores for the network passed in
-    def compute_ELO(self, network):
+    def compute_elo(self, network):
         """
         This just evaluates the model against stockfish
         and computes ELO!
@@ -393,9 +412,13 @@ class Agent:
         # remember render = true here
         pass
 
-    def save_graph(self, elo, steps_computed_at):
-        # do this if its possible to graph elo over time
-        pass
+    def save_graph(self, network_elos, network_elo_step_computed):
+        fig = plt.figure(1)
+        plt.xlabel('Steps')
+        plt.ylabel('Model ELO')
+        plt.plot(network_elo_step_computed, network_elos)
+        fig.savefig(self.GRAPH_FILE)
+        plt.close(fig) # so figures don't pile up 
     
     def save_models(self):
         # avoid overwriting
