@@ -266,6 +266,8 @@ class Agent:
                 # Update best elo
                 if network_elo > best_elo:
                     best_elo = network_elo
+                
+                num_steps = 0
 
     def optimize(self, network, optimizer, observations, actions, masks, old_log_probs, advantages, returns):
         """
