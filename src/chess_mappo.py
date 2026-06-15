@@ -246,6 +246,7 @@ class Agent:
 
                 # Log
                 message = f"New ELO: {network_elo} at step: {num_steps} ({wins}W/{draws}D/{losses}L)"
+                self._log(message)
 
                 # Add that to list
                 network_elos.append(network_elo)
