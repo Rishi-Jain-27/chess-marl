@@ -14,3 +14,37 @@ cnn_chess:
   max_grad_norm: 0.5
   steps_per_save: 100000
   num_elo_loops: 30
+
+transformer_chess:
+  learning_rate: 0.0005
+  gamma: 0.99
+  hidden_dim: 256
+  stop_on_reward: 0.95
+  window: 1000
+  gae_lambda: 0.95
+  clip_ratio: 0.2
+  steps_per_update: 256
+  epochs_per_optimize: 3
+  minibatch_size: 64
+  value_coef: 0.5
+  entropy_coef: 0.01
+  max_grad_norm: 0.5
+  steps_per_save: 100000
+  num_elo_loops: 30
+
+hybrid_chess:
+  learning_rate: 0.0005
+  gamma: 0.99
+  hidden_dim: 256
+  stop_on_reward: 0.95
+  window: 1000
+  gae_lambda: 0.95
+  clip_ratio: 0.2
+  steps_per_update: 256
+  epochs_per_optimize: 3
+  minibatch_size: 64
+  value_coef: 0.5
+  entropy_coef: 0.01
+  max_grad_norm: 0.5
+  steps_per_save: 100000
+  num_elo_loops: 30
