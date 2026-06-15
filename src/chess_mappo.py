@@ -199,6 +199,7 @@ class Agent:
 
         # Create env
         env = chess_v6.env(render_mode=None)
+        env.reset()
 
         # Weight sharing -- create networks & optimizer
         agent = env.agent_selection # gets the agent we're starting with — whichever plays white
@@ -404,6 +405,7 @@ class Agent:
     def run(self, elo):
         # Create env
         env = chess_v6.env(render_mode="human")
+        env.reset()
 
         # ditto network
         agent = env.agent_selection
