@@ -241,12 +241,11 @@ class Agent:
             num_steps += len(actions)
 
             if num_steps >= self.steps_per_save:
-                # Find network elo
-                network_elo = self.compute_elo(network)
+                # Find network elo (logging happens in compute elo)
+                network_elo, wins, draws, losses = self.compute_elo(network) # type: ignore
 
-                # Log that
-                message = f"New ELO: {network_elo} at step: {num_steps}"
-                self._log(message)
+                # Log
+                message = f"New ELO: {network_elo} at step: {num_steps} ({wins}W/{draws}D/{losses}L)"
 
                 # Add that to list
                 network_elos.append(network_elo)
@@ -396,6 +395,7 @@ class Agent:
             for i in reward_per_game:
                 if i == 1: wins += 1
                 if i == 0: draws += 1
+            losses = num_games - wins - draws
             
             # Calculated inverse of the ELO formula
             # E = 1/(1 + 10^(elo difference/400))
@@ -404,7 +404,7 @@ class Agent:
             elo_diff = -400 * math.log10(1/(score_rate) - 1)
 
             network.train()
-            return round(opponent_elo + elo_diff) # represents our bot elo as an integer
+            return (round(opponent_elo + elo_diff), wins, draws, losses) # represents our bot elo as an integer
         
         finally:
             engine.quit()
