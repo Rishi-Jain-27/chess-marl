@@ -69,7 +69,9 @@ class ActorCritic(nn.Module):
         return (logits, self.critic_head(x).squeeze(-1))
     
     def select_action(self, state, action_mask):
-        state_t = torch.as_tensor(state, dtype=torch.float32) # state features are 8x8x111
+        device = next(self.parameters()).device
+
+        state_t = torch.as_tensor(state, dtype=torch.float32, device=device) # state features are 8x8x111
         state_t = state_t.unsqueeze(0) # add batch dim
         logits, value = self(state_t, action_mask)
 
@@ -85,7 +87,7 @@ class ActorCritic(nn.Module):
 
         # Re-score the picks from select action
 
-        states_t = torch.as_tensor(states, dtype=torch.float32)
+        states_t = torch.as_tensor(states, dtype=torch.float32, device=next(self.parameters()).device)
 
         logits, values = self(states_t, old_action_masks)
 

@@ -63,7 +63,8 @@ class ActorCritic(nn.Module):
         return (logits, self.critic_head(x).squeeze(-1))
     
     def select_action(self, state, action_mask):
-        state_t = torch.as_tensor(state, dtype=torch.float32)
+        device = next(self.parameters()).device
+        state_t = torch.as_tensor(state, dtype=torch.float32, device=device)
         state_t = state_t.unsqueeze(0) # add batch dim
         logits, value = self(state_t, action_mask)
         dist = Categorical(logits=logits)
@@ -72,7 +73,7 @@ class ActorCritic(nn.Module):
         return (action.item(), log_prob.detach(), value.detach())
     
     def evaluate_actions(self, states, actions, old_action_masks):
-        states_t = torch.as_tensor(states, dtype=torch.float32)
+        states_t = torch.as_tensor(states, dtype=torch.float32, device=next(self.parameters()).device)
         logits, values = self(states_t, old_action_masks)
         dist = Categorical(logits=logits)
         new_log_probs = dist.log_prob(torch.as_tensor(actions, dtype=torch.long))
