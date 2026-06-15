@@ -10,7 +10,7 @@ import chess.engine
 import torch
 import numpy as np
 import math
-from model_architectures.cnn import ActorCritic, compute_gae
+from model_architectures.cnn import ActorCritic, compute_gae # change this to change what architecture we test!
 
 import yaml
 import itertools
@@ -460,20 +460,18 @@ class Agent:
             f.write(message + '\n')
 
 def main():
-    pass
-"""
-parser = argparse.ArgumentParser(description="Train or test?")
-    parser.add_argument('hyperparameters', help='Enter the name of the set of hyperparameters to test/train')
-    parser.add_argument('--train', help='Training mode', action='store_true')
+    parser = argparse.ArgumentParser(description="Train or run the chess bot?")
+    parser.add_argument("hyperparameters", help="Enter the name of the set of hyperparameters to test/train")
+    parser.add_argument("--train", help="Training mode", action="store_true")
+    parser.add_argument("--elo", help="ELO value of the model to run.", type=int)
     args = parser.parse_args()
 
-    ppo = PPOAgent(hyperparameter_set=args.hyperparameters)
+    chess_bot = Agent(hyperparameter_set=args.hyperparameters)
 
     if args.train:
-        ppo.train()
+        chess_bot.train()
     else:
-        ppo.run()
-"""
+        chess_bot.run(elo=args.elo)
 
 if __name__ == '__main__':
-    pass
+    main()
