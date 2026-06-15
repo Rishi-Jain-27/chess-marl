@@ -394,15 +394,45 @@ class Agent:
             elo_diff = -400 * math.log10(1/(score_rate) - 1)
 
             network.train()
-            return opponent_elo + elo_diff # represents our bot elo
+            return round(opponent_elo + elo_diff) # represents our bot elo as an integer
         
         finally:
             engine.quit()
             network.train()
 
-    def run(self):
-        # remember render = true ('human') here
-        pass
+    def run(self, elo):
+        # Create env
+        env = chess_v6.env(render_mode="human")
+
+        # ditto network
+        agent = env.agent_selection
+        num_states = env.observation_space(agent).shape
+        action_space = cast(Discrete, env.action_space(agent))
+        num_actions = action_space.n
+        network = ActorCritic(num_states, num_actions, hidden_dim=self.hidden_dim).to(device)
+
+        self.load_model(network, elo)
+
+        # Activate inference settings
+        network.eval()
+        with torch.inference_mode():
+            # play!
+            for agent in env.agent_iter():
+                observation, reward, terminated, truncated, _ = env.last()
+
+                # get action
+                if terminated or truncated:
+                    action = None
+                else:
+                    assert observation is not None
+                    mask = observation["action_mask"]
+
+                    logits, _ = network(torch.tensor(observation["observation"], dtype=torch.float32), mask)
+                    action = int(torch.argmax(logits, dim=-1).item())
+
+                env.step(action)
+            
+            env.close()
 
     def save_graph(self, network_elos, network_elo_step_computed):
         fig = plt.figure(1)
@@ -416,8 +446,12 @@ class Agent:
         model_path = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}_ELO_{elo}.pt')
         torch.save(network.state_dict(), model_path)
 
-    def load_model(self):
-        pass
+    def load_model(self, network, elo):
+        model_path = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}_ELO_{elo}.pt')
+        try:
+            network.load_state_dict(torch.load(model_path, weights_only=True))
+        except:
+            raise ValueError("Elo value must correspond to possible model elos.")
     
     # log elo
     def _log(self, message):
