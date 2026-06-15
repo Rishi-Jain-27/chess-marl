@@ -1,9 +1,15 @@
+#need to create colab notebook for training this ofc
 
 from pettingzoo.classic import chess_v6
+from pettingzoo.classic.chess import chess_utils
 from gymnasium.spaces import Discrete
+
+import chess
+import chess.engine
 
 import torch
 import numpy as np
+import math
 from model_architectures.cnn import ActorCritic, compute_gae
 
 import yaml
@@ -16,7 +22,7 @@ import argparse
 from typing import cast
 
 
-
+STOCKFISH_PATH = "/opt/homebrew/bin/stockfish" # first had to run brew install stockfish
 DATE_FORMAT = "%y-%m-%d %H:%M:%S"
 RUNS_DIR = "runs"
 os.makedirs(RUNS_DIR, exist_ok=True)
@@ -39,12 +45,13 @@ class Agent:
         self.gae_lambda = hyperparameters['gae_lambda']
         self.clip_ratio = hyperparameters['clip_ratio']
         self.steps_per_update = hyperparameters['steps_per_update']
-        self.epochs_per_rollout = hyperparameters['epochs_per_rollout']
+        self.epochs_per_optimize = hyperparameters['epochs_per_optimize']
         self.minibatch_size = hyperparameters['minibatch_size']
         self.value_coef = hyperparameters['value_coef']
         self.entropy_coef = hyperparameters['entropy_coef']
         self.max_grad_norm = hyperparameters['max_grad_norm']
-        self.episodes_per_elo_update = hyperparameters['episodes_per_elo_update']
+        self.steps_per_save = hyperparameters['steps_per_save']
+        self.num_elo_loops = hyperparameters['num_elo_loops']
 
         self.LOG_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.log')
         self.MODEL_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.pt')
@@ -126,7 +133,7 @@ class Agent:
                 env.step(action)
 
                 # check conditions
-                if not env.agents:
+                if not env.agents: # could also move this outside of the for loop
                     completed_ep_rewards.append(current_ep_reward)
                     current_ep_reward = 0
                     pending = {}
@@ -154,8 +161,10 @@ class Agent:
             and negative GAE for recursion
             so the fix for this is in GAE calculation.
             """
-            state = env.last()[0]
-            _, last_value = network(torch.as_tensor(state["observation"], dtype=torch.float32), state["action_mask"])
+            observation = env.last()[0]
+            with torch.no_grad():
+                # unsqueeze to add the batch dim of 1
+                _, last_value = network(torch.as_tensor(observation["observation"], dtype=torch.float32).unsqueeze(0), observation["action_mask"])
             last_value = last_value.item()
         
         # make these a tensor bc needed for optimizer, the rest gets normal math done on by GAE calc
@@ -200,18 +209,13 @@ class Agent:
         action_space = cast(Discrete, env.action_space(agent))
         num_actions = action_space.n
 
-        network = ActorCritic(num_states, num_actions, hidden_dim=self.hidden_dim)
+        network = ActorCritic(num_states, num_actions, hidden_dim=self.hidden_dim).to(device)
         optimizer = torch.optim.Adam(params=network.parameters(),
                                      lr=self.learning_rate)
 
-        # also create the loss function
-        loss_fn = torch.nn.MSELoss()
-
         # start collecting metrics
-        episodes = 0
-        rewards_per_episodes_in_rollout = []
-        mean_rewards = []
-        best_reward = float('-inf')
+        num_steps = 0
+        best_elo = float('-inf')
 
         # begin logging
         start_time = datetime.now()
@@ -222,29 +226,179 @@ class Agent:
         # Begin the loop
         for _ in itertools.count():
             # 2. Train loop
-            
+
             # Collect rollout
+            observations, actions, old_log_probs, masks, rewards, values, dones, last_value, completed_ep_rewards = self.collect_rollout(env, network)
 
             # Compute GAE
+            advantages, returns = compute_gae(rewards, values, dones, last_value, self.gamma, self.gae_lambda)
 
             # Optimize
+            self.optimize(network, optimizer, observations, actions, masks, old_log_probs, advantages, returns)
 
             # Metrics
+            num_steps += len(actions)
+
+            """
+            To do:
+            create the elo tracking thing
+            i dont think bestmean reward or rewards per episode and all are very helpful
+
+            Compute elo and note the step elo was computed at
+            graph it
+            if numsteps >= steps per save then:
+                save permanently the model if the elo of the model is 100 greater than the previous best elo
+                implement checkpointing logic to make it so the model does NOT overwrite
+
+            """
             pass
         pass
 
-    def optimize(self):
-        pass
+    def optimize(self, network, optimizer, observations, actions, masks, old_log_probs, advantages, returns):
+        """
+        Implement's PPO surrogate loss calculation stuff
+
+        Basically:
+        - each rollout we loop epochs times and then however many times to fill the minibatches
+        - and create indexes for the minibatches
+        - Get minibatches
+        - Evaluate the past minibatched states and minibatched actions (remember the mask)
+        - Find the ratio
+        - Find surrogate one and two
+        - Get the actor and critic loss
+        - calculate total loss, optimize.
+        """
+        for epoch in range(self.epochs_per_optimize):
+            # note that self.steps_per_update may not be 100% equal to the batch length
+            perm = torch.randperm(observations.shape[0])
+            for start in range(observations.shape[0] // self.minibatch_size):
+                minibatch_idx = perm[start * self.minibatch_size : (start + 1) * self.minibatch_size]
+
+                observations_minibatch = observations[minibatch_idx]
+                actions_minibatch = actions[minibatch_idx]
+                old_log_probs_minibatch = old_log_probs[minibatch_idx]
+                advantages_minibatch = advantages[minibatch_idx]
+                returns_minibatch = returns[minibatch_idx]
+                masks_minibatch = masks[minibatch_idx]
+
+                # Evaluate past states and actions
+                new_log_probs, entropy, values = network.evaluate_actions(observations_minibatch, actions_minibatch, masks_minibatch)
+                ratio = torch.exp(new_log_probs - old_log_probs_minibatch) # importance sampling ratio
+                surrogate_one = ratio * advantages_minibatch
+                surrogate_two = torch.clamp(ratio, 1 - self.clip_ratio, 1 + self.clip_ratio) * advantages_minibatch # surrogate 2 is 1 but clipped
+                actor_loss = -torch.min(surrogate_one, surrogate_two).mean()
+                critic_loss = torch.mean((values - returns_minibatch)**2) # what we predicted to get - what we actually got **2
+                loss = actor_loss + (self.value_coef * critic_loss) - (self.entropy_coef * entropy.mean())
+
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(network.parameters(), self.max_grad_norm)
+                optimizer.step()
+
+    # this computes ELO scores for the network passed in
+    def compute_ELO(self, network):
+        """
+        This just evaluates the model against stockfish
+        and computes ELO!
+        """
+
+        network.eval()
+
+        # Creating stockfish engine
+        # Stockfish depth 3 == 1000 elo baseline
+        try:
+            # Initialize the engine
+            engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
+            opponent_elo = 1000
+        except FileNotFoundError:
+            print(f"Stockfish not at {STOCKFISH_PATH}. Run 'brew install stockfish'")
+            network.train() # just set it back to train before going back
+            return
+        
+        reward_per_game = []
+
+        try:
+            for i in range(self.num_elo_loops):
+                network_agent = "player_0" if i % 2 == 0 else "player_1"
+                env = chess_v6.env(render_mode=None)
+                unwrapped_env = env.unwrapped
+
+                env.reset()
+
+                game_reward = 0
+
+                # game loop
+                for agent in env.agent_iter():
+                    observation, reward, terminated, truncated, _ = env.last()
+
+                    if agent == network_agent: game_reward += reward # accum reward if its our turn!
+                    # don't put ^ below or will miss reward when terminated or truncated
+
+                    # Get action
+                    if terminated or truncated:
+                        action = None
+                    elif agent == network_agent: # network turn
+                        with torch.inference_mode():
+                            assert observation is not None
+                            logits, _ = network(torch.tensor(observation["observation"], dtype=torch.float32).unsqueeze(0), observation["action_mask"])
+                            action = int(torch.argmax(logits, dim=-1).item()) # get the best move
+                    else: # stockfish turn
+                        
+                        # We ask stockfish for a move
+
+                        board = unwrapped_env.board # type: ignore[attr-defined]
+                        player = 0 if board.turn == chess.WHITE else 1
+
+                        result = engine.play(board, chess.engine.Limit(depth=3))
+
+                        # then find what legal action decodes to it
+                        """
+                        Stockfish outputs a chess.Move, like e2e4 (pawn from e2 to e4)
+                        This is just decoding that to the 0-4671 integers that PettingZoo uses
+                        and PettingZoo encodes that to the action
+                        """
+                        assert observation is not None
+                        for act in np.flatnonzero(observation["action_mask"]): # loop thru legal moves
+                            if chess_utils.action_to_move(board, int(act), player) == result.move:
+                                action = int(act)
+                                break
+
+                    env.step(action)
+                
+                # Add the game's reward to the overall list
+                reward_per_game.append(game_reward)
+            
+            # outside of looping all the games:
+            wins = 0
+            draws = 0
+            num_games = len(reward_per_game)
+            for i in reward_per_game:
+                if i == 1: wins += 1
+                if i == 0: draws += 1
+            
+            # Calculated inverse of the ELO formula
+            # E = 1/(1 + 10^(elo difference/400))
+            # thus elo difference = -400 * logbase10of (1/Elo - 1)
+            score_rate = min(max(((wins + 0.5 * draws) / num_games), 1e-4), 1 - 1e-4) # clamp
+            elo_diff = -400 * math.log10(1/(score_rate) - 1)
+
+            network.train()
+            return opponent_elo + elo_diff # represents our bot elo
+        
+        finally:
+            engine.quit()
+            network.train()
 
     def run(self):
         # remember render = true here
         pass
 
-    def save_graph(self):
+    def save_graph(self, elo, steps_computed_at):
         # do this if its possible to graph elo over time
         pass
     
     def save_models(self):
+        # avoid overwriting
         pass
 
     def load_models(self):
