@@ -54,7 +54,6 @@ class Agent:
         self.num_elo_loops = hyperparameters['num_elo_loops']
 
         self.LOG_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.log')
-        self.MODEL_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.pt')
         self.GRAPH_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.png')
 
     def collect_rollout(self, env, network):
@@ -222,7 +221,7 @@ class Agent:
         # begin logging
         start_time = datetime.now()
         last_graph_update_time = start_time
-        message = f"{start_time.strftime(DATE_FORMAT)}: Training starting. Reward: N/A; ELO: 0"
+        message = f"{start_time.strftime(DATE_FORMAT)}: Training starting. ELO: 0"
         self._log(message)
 
         # Begin the loop
@@ -245,6 +244,10 @@ class Agent:
                 # Find network elo
                 network_elo = self.compute_elo(network)
 
+                # Log that
+                message = f"New ELO: {network_elo} at step: {num_steps}"
+                self._log(message)
+
                 # Add that to list
                 network_elos.append(network_elo)
                 network_elo_step_computed.append(num_steps)
@@ -252,26 +255,15 @@ class Agent:
                 # Graph it
                 self.save_graph(network_elos, network_elo_step_computed)
 
-                # Save permanently
-
-
-                # Update best elo
+                # Save permanently if elo is 100 greater than previous best elo
                 assert network_elo is not None # these asserts are so pylance doesn't go insane
                 assert best_elo is not None
+                if network_elo >= (best_elo + 100):
+                    self.save_model(network, network_elo)
+                
+                # Update best elo
                 if network_elo > best_elo:
                     best_elo = network_elo
-            """
-            To do:
-            create the elo tracking thing
-            i dont think bestmean reward or rewards per episode and all are very helpful
-
-            if numsteps >= steps per save then:
-                Compute elo and note the step elo was computed at
-                graph it
-                save permanently the model if the elo of the model is 100 greater than the previous best elo
-                implement checkpointing logic to make it so the model does NOT overwrite
-
-            """
 
     def optimize(self, network, optimizer, observations, actions, masks, old_log_probs, advantages, returns):
         """
@@ -409,7 +401,7 @@ class Agent:
             network.train()
 
     def run(self):
-        # remember render = true here
+        # remember render = true ('human') here
         pass
 
     def save_graph(self, network_elos, network_elo_step_computed):
@@ -420,14 +412,14 @@ class Agent:
         fig.savefig(self.GRAPH_FILE)
         plt.close(fig) # so figures don't pile up 
     
-    def save_models(self):
-        # avoid overwriting
-        pass
+    def save_model(self, network, elo):
+        model_path = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}_ELO_{elo}.pt')
+        torch.save(network.state_dict(), model_path)
 
-    def load_models(self):
+    def load_model(self):
         pass
     
-    # ideally we log both reward AND elo tho
+    # log elo
     def _log(self, message):
         print(message)
         with open(self.LOG_FILE, 'a') as f:
