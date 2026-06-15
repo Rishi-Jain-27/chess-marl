@@ -20,8 +20,9 @@ from datetime import datetime, timedelta
 import argparse
 from typing import cast
 
+# before stockfish path, run brew install stockfish
+STOCKFISH_PATH = os.environ.get("STOCKFISH_PATH", "/opt/homebrew/bin/stockfish")
 
-STOCKFISH_PATH = "/opt/homebrew/bin/stockfish" # first had to run brew install stockfish
 DATE_FORMAT = "%y-%m-%d %H:%M:%S"
 RUNS_DIR = "runs"
 os.makedirs(RUNS_DIR, exist_ok=True)
