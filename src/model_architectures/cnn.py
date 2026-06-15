@@ -105,8 +105,8 @@ def compute_gae(rewards, values, dones, last_value, gamma, gae_lambda):
 
     for t in reversed(range(len(rewards))): # this goes backwards thru time
         mask = 1.0 - float(dones[t]) # if dones[t] is true, mask zeros delta & gae
-        delta = rewards[t] + (gamma * values[t + 1] * mask) - values[t]
-        gae = delta + gamma * gae_lambda * mask * gae # gae recursion
+        delta = rewards[t] + (gamma * -values[t + 1] * mask) - values[t]
+        gae = delta + gamma * gae_lambda * mask * -gae # gae recursion
         advantages.insert(0, gae) # prepend bc iterating backwards
     
     advantages = torch.as_tensor(advantages, dtype=torch.float32)

@@ -50,8 +50,124 @@ class Agent:
         self.MODEL_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.pt')
         self.GRAPH_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.png')
 
-    def collect_rollout(self):
-        pass
+    def collect_rollout(self, env, network):
+        """
+        interesting things:
+        current_ep_reward is prolly 0 bc white +1 == black -1
+        """
+
+        """
+        This has 10 parts: (i struggled a lot to understand this)
+        1. init all the buffers
+        2. loops & get obs, reward, term, and trunc 
+        3. update rewards and dones bc those are past things (see pending logic)
+        4. update current ep reward
+        5. get action (and log prob and value)
+        6. append everything to buffers if not already done so
+        7. env step by action
+        8. check agents still existing and length actions logic
+        9. outside all that loop: bootstrap last val in case cut off
+        10. convert necessary buffers -> tensors, return them
+
+        Note that there is no global observation 
+        """
+        observations = []
+        actions = []
+        log_probs = []
+        rewards = []
+        values = []
+        dones = []
+        masks = []
+        completed_ep_rewards = []
+        current_ep_reward = 0
+        pending = {} # key: each agent. value: id of their PAST reward
+        env.reset() # in MARL, doesn't return anything
+
+        while len(actions) < self.steps_per_update:
+            for agent in env.agent_iter():
+                observation, reward, terminated, truncated, _ = env.last()
+                """
+                In AEC, env.last() returns data for the current agent (env.agent_selection)
+                so all of this is correct for this agent
+                """
+
+                done = terminated | truncated
+                """
+                while coding this, misc idea came up:
+                if we make done = term OR trunc, we essentially incentivize the agent to finish the game as fast as possible
+                bc there is no future value for trunc
+                """
+
+                # the reward from env.last() is what the agent earned ever since its previous turn
+                # so attach that reward to the previous transition because that reward
+                # is the reward AS A RESULT of the transition in the past!
+                if agent in pending:
+                    rewards[pending[agent]] += reward
+                    dones[pending[agent]] = done
+                
+                current_ep_reward += reward
+
+                if done:
+                    action = None
+                else:
+                    mask = observation["action_mask"]
+                    action, log_prob, value = network.select_action(observation["observation"], mask)
+
+                    # append them to their respective buffers
+                    actions.append(action)
+                    log_probs.append(log_prob)
+                    values.append(value.item()) # .item() to make value go from 0D tensor to a plain float
+                    masks.append(mask)
+                    observations.append(observation["observation"])
+                    rewards.append(0.0) # this is a placeholder
+                    dones.append(False) # ditto ^
+                    pending[agent] = len(actions) - 1 # so it points to the last transition
+                
+                env.step(action)
+
+                # check conditions
+                if not env.agents:
+                    completed_ep_rewards.append(current_ep_reward)
+                    current_ep_reward = 0
+                    pending = {}
+                    env.reset()
+                
+                if len(actions) >= self.steps_per_update:
+                    break
+        
+        # bootstrap last value if we ended midway thru OR at the end of an episode
+        # network(torch.tensor(env.last()[0]))[1] == network(torch.tensor(next state))[1] == value of next state
+        if not env.agents:
+            last_value = 0
+        else:
+            """
+            because this runs AFTER env.step(action)
+            step advances to the next agent
+            so we need to negative this last value because the value of the next agent
+            is the opposite of our value
+            and vice versa
+
+
+            BUT this issue is also in GAE
+            bc our buffers alternate white black white black...
+            so in GAE, we negative the v[t + 1] for delta
+            and negative GAE for recursion
+            so the fix for this is in GAE calculation.
+            """
+            state = env.last()[0]
+            _, last_value = network(torch.as_tensor(state["observation"], dtype=torch.float32), state["action_mask"])
+            last_value = last_value.item()
+        
+        # make these a tensor bc needed for optimizer, the rest gets normal math done on by GAE calc
+        observations = torch.as_tensor(np.array(observations), dtype=torch.float32) # np array bc each state is a list of ndarrays (i think)
+        actions = torch.as_tensor(actions, dtype=torch.long)
+        old_log_probs = torch.stack(log_probs) # just stack into a shape of the number of transitions — stacks 0D log probs in to 1D tensor
+
+        # do np.array bc masks is a list of np.ndarray 1D masks
+        masks = torch.as_tensor(np.array(masks), dtype=torch.int8) # note: could update architecture forwards bc they already torch.tensorify mask anyway
+
+        return (observations, actions, old_log_probs, masks, rewards, values, dones,
+        last_value, completed_ep_rewards)
 
     def train(self):
         """
@@ -105,29 +221,16 @@ class Agent:
 
         # Begin the loop
         for _ in itertools.count():
+            # 2. Train loop
+            
+            # Collect rollout
+
+            # Compute GAE
+
+            # Optimize
+
+            # Metrics
             pass
-        """
-        for agent in env.agent_iter():
-            observation, reward, termination, truncation, info = env.last()
-
-            if termination or truncation:
-                action = None
-            else:
-                mask = observation["action_mask"]
-                # this is where you would insert your policy
-                action = env.action_space(agent).sample(mask)
-
-            env.step(action)
-        env.close()
-        """
-
-        # 2. Train loop
-        """
-        During the train loop, I need to:
-        - collect a rollout
-        - update all metrics, including for saving a graph, saving the model, and stop on reward
-        - Optimize the models
-        """
         pass
 
     def optimize(self):
