@@ -204,7 +204,7 @@ class Agent:
         # Weight sharing -- create networks & optimizer
         agent = env.agent_selection # gets the agent we're starting with — whichever plays white
 
-        num_states = env.observation_space(agent).shape
+        num_states = env.observation_space(agent)["observation"].shape # type: ignore
 
         action_space = cast(Discrete, env.action_space(agent))
         num_actions = action_space.n
@@ -409,7 +409,7 @@ class Agent:
 
         # ditto network
         agent = env.agent_selection
-        num_states = env.observation_space(agent).shape
+        num_states = env.observation_space(agent)["observation"].shape # type: ignore
         action_space = cast(Discrete, env.action_space(agent))
         num_actions = action_space.n
         network = ActorCritic(num_states, num_actions, hidden_dim=self.hidden_dim).to(device)
