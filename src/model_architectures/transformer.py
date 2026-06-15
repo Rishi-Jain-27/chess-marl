@@ -62,10 +62,11 @@ class ActorCritic(nn.Module):
         return (action.item(), log_prob.detach(), value.detach())
     
     def evaluate_actions(self, states, actions, old_action_masks):
-        states_t = torch.as_tensor(states, dtype=torch.float32, device=next(self.parameters()).device)
+        device = next(self.parameters()).device
+        states_t = torch.as_tensor(states, dtype=torch.float32, device=device)
         logits, values = self(states_t, old_action_masks)
         dist = Categorical(logits=logits)
-        new_log_probs = dist.log_prob(torch.as_tensor(actions, dtype=torch.long))
+        new_log_probs = dist.log_prob(torch.as_tensor(actions, dtype=torch.long, device=device))
         entropy = dist.entropy()
         return (new_log_probs, entropy, values)
     

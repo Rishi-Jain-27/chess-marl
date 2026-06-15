@@ -281,9 +281,17 @@ class Agent:
         - Get the actor and critic loss
         - calculate total loss, optimize.
         """
+
+        observations = observations.to(device)
+        actions = actions.to(device)
+        masks = masks.to(device)
+        old_log_probs = old_log_probs.to(device)
+        advantages = advantages.to(device)
+        returns = returns.to(device)
+
         for epoch in range(self.epochs_per_optimize):
             # note that self.steps_per_update may not be 100% equal to the batch length
-            perm = torch.randperm(observations.shape[0])
+            perm = torch.randperm(observations.shape[0], device=device)
             for start in range(observations.shape[0] // self.minibatch_size):
                 minibatch_idx = perm[start * self.minibatch_size : (start + 1) * self.minibatch_size]
 
@@ -353,7 +361,7 @@ class Agent:
                     elif agent == network_agent: # network turn
                         with torch.inference_mode():
                             assert observation is not None
-                            logits, _ = network(torch.as_tensor(np.ascontiguousarray(observation["observation"]), dtype=torch.float32).unsqueeze(0), observation["action_mask"])
+                            logits, _ = network(torch.as_tensor(np.ascontiguousarray(observation["observation"]), dtype=torch.float32, device=device).unsqueeze(0), observation["action_mask"])
                             action = int(torch.argmax(logits, dim=-1).item()) # get the best move
                     else: # stockfish turn
                         
@@ -430,7 +438,7 @@ class Agent:
                     assert observation is not None
                     mask = observation["action_mask"]
 
-                    logits, _ = network(torch.as_tensor(np.ascontiguousarray(observation["observation"]), dtype=torch.float32).unsqueeze(0), mask)
+                    logits, _ = network(torch.as_tensor(np.ascontiguousarray(observation["observation"]), dtype=torch.float32, device=device).unsqueeze(0), mask)
                     action = int(torch.argmax(logits, dim=-1).item())
 
                 env.step(action)
