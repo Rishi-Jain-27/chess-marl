@@ -53,7 +53,7 @@ class ActorCritic(nn.Module):
     
     def select_action(self, state, action_mask):
         device = next(self.parameters()).device
-        state_t = torch.as_tensor(state, dtype=torch.float32, device=device)
+        state_t = torch.as_tensor(state.copy(), dtype=torch.float32, device=device)
         state_t = state_t.unsqueeze(0) # add batch dim
         logits, value = self(state_t, action_mask)
         dist = Categorical(logits=logits)

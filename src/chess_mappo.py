@@ -167,7 +167,7 @@ class Agent:
             last_value = last_value.item()
         
         # make these a tensor bc needed for optimizer, the rest gets normal math done on by GAE calc
-        observations = torch.as_tensor(np.array(observations), dtype=torch.float32) # np array bc each state is a list of ndarrays (i think)
+        observations = torch.as_tensor(np.ascontiguousarray(np.array(observations)), dtype=torch.float32) # np array bc each state is a list of ndarrays (i think)
         actions = torch.as_tensor(actions, dtype=torch.long)
         old_log_probs = torch.stack(log_probs) # just stack into a shape of the number of transitions — stacks 0D log probs in to 1D tensor
 
@@ -353,7 +353,7 @@ class Agent:
                     elif agent == network_agent: # network turn
                         with torch.inference_mode():
                             assert observation is not None
-                            logits, _ = network(torch.tensor(observation["observation"], dtype=torch.float32).unsqueeze(0), observation["action_mask"])
+                            logits, _ = network(torch.as_tensor(np.ascontiguousarray(observation["observation"]), dtype=torch.float32).unsqueeze(0), observation["action_mask"])
                             action = int(torch.argmax(logits, dim=-1).item()) # get the best move
                     else: # stockfish turn
                         
@@ -430,7 +430,7 @@ class Agent:
                     assert observation is not None
                     mask = observation["action_mask"]
 
-                    logits, _ = network(torch.tensor(observation["observation"], dtype=torch.float32).unsqueeze(0), mask)
+                    logits, _ = network(torch.as_tensor(np.ascontiguousarray(observation["observation"]), dtype=torch.float32).unsqueeze(0), mask)
                     action = int(torch.argmax(logits, dim=-1).item())
 
                 env.step(action)
