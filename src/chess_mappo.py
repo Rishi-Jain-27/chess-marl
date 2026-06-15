@@ -294,7 +294,7 @@ class Agent:
 
                 # Evaluate past states and actions
                 new_log_probs, entropy, values = network.evaluate_actions(observations_minibatch, actions_minibatch, masks_minibatch)
-                ratio = torch.exp(new_log_probs - old_log_probs_minibatch) # importance sampling ratio
+                ratio = torch.exp(new_log_probs - old_log_probs_minibatch.squeeze(-1)) # importance sampling ratio
                 surrogate_one = ratio * advantages_minibatch
                 surrogate_two = torch.clamp(ratio, 1 - self.clip_ratio, 1 + self.clip_ratio) * advantages_minibatch # surrogate 2 is 1 but clipped
                 actor_loss = -torch.min(surrogate_one, surrogate_two).mean()
@@ -427,7 +427,7 @@ class Agent:
                     assert observation is not None
                     mask = observation["action_mask"]
 
-                    logits, _ = network(torch.tensor(observation["observation"], dtype=torch.float32), mask)
+                    logits, _ = network(torch.tensor(observation["observation"], dtype=torch.float32).unsqueeze(0), mask)
                     action = int(torch.argmax(logits, dim=-1).item())
 
                 env.step(action)

@@ -48,7 +48,7 @@ class ActorCritic(nn.Module):
         x = x + self.positional_embedding # the b and 1 dims get casted to b
         x = self.transformer_encoder(x)
         logits = self.actor_head(x)
-        logits = logits.masked_fill(torch.tensor(action_mask == 0, device=logits.device), -1e9)
+        logits = logits.masked_fill(torch.as_tensor(action_mask, device=logits.device) == 0, -1e9)
         return (logits, self.critic_head(x).squeeze(-1))
     
     def select_action(self, state, action_mask):

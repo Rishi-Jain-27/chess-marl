@@ -12,7 +12,7 @@ cnn_chess:
   value_coef: 0.5
   entropy_coef: 0.01
   max_grad_norm: 0.5
-  steps_per_save: 100000
+  steps_per_save: 5000
   num_elo_loops: 30
 
 transformer_chess:
@@ -29,7 +29,7 @@ transformer_chess:
   value_coef: 0.5
   entropy_coef: 0.01
   max_grad_norm: 0.5
-  steps_per_save: 100000
+  steps_per_save: 5000
   num_elo_loops: 30
 
 hybrid_chess:
@@ -46,5 +46,5 @@ hybrid_chess:
   value_coef: 0.5
   entropy_coef: 0.01
   max_grad_norm: 0.5
-  steps_per_save: 100000
+  steps_per_save: 5000
   num_elo_loops: 30
