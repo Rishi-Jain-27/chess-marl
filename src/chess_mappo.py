@@ -163,7 +163,7 @@ class Agent:
             observation = env.last()[0]
             with torch.no_grad():
                 # unsqueeze to add the batch dim of 1
-                _, last_value = network(torch.as_tensor(observation["observation"], dtype=torch.float32, device=device).unsqueeze(0), observation["action_mask"])
+                _, last_value = network(torch.as_tensor(np.ascontiguousarray(observation["observation"]), dtype=torch.float32, device=device).unsqueeze(0), observation["action_mask"])
             last_value = last_value.item()
         
         # make these a tensor bc needed for optimizer, the rest gets normal math done on by GAE calc
