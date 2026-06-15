@@ -15,7 +15,6 @@ from model_architectures.cnn import ActorCritic, compute_gae
 import yaml
 import itertools
 import os
-import random
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import argparse
@@ -219,9 +218,8 @@ class Agent:
         network_elo_step_computed = []
 
         # begin logging
-        start_time = datetime.now()
-        last_graph_update_time = start_time
-        message = f"{start_time.strftime(DATE_FORMAT)}: Training starting. ELO: 0"
+        last_graph_update_time = datetime.now()
+        message = f"{datetime.now().strftime(DATE_FORMAT)}: Training starting. ELO: 0"
         self._log(message)
 
         # Begin the loop
@@ -253,7 +251,9 @@ class Agent:
                 network_elo_step_computed.append(num_steps)
 
                 # Graph it
-                self.save_graph(network_elos, network_elo_step_computed)
+                if datetime.now() - last_graph_update_time > timedelta(seconds=10):
+                    self.save_graph(network_elos, network_elo_step_computed)
+                    last_graph_update_time = datetime.now()
 
                 # Save permanently if elo is 100 greater than previous best elo
                 assert network_elo is not None # these asserts are so pylance doesn't go insane
@@ -461,6 +461,19 @@ class Agent:
 
 def main():
     pass
+"""
+parser = argparse.ArgumentParser(description="Train or test?")
+    parser.add_argument('hyperparameters', help='Enter the name of the set of hyperparameters to test/train')
+    parser.add_argument('--train', help='Training mode', action='store_true')
+    args = parser.parse_args()
+
+    ppo = PPOAgent(hyperparameter_set=args.hyperparameters)
+
+    if args.train:
+        ppo.train()
+    else:
+        ppo.run()
+"""
 
 if __name__ == '__main__':
     pass
