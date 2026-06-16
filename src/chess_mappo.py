@@ -470,6 +470,7 @@ class Agent:
         
         # Create env
         env = chess_v6.env(render_mode="human")
+        unwrapped_env = env.unwrapped
         env.reset()
 
         # ditto network
@@ -486,7 +487,7 @@ class Agent:
         with torch.inference_mode():
             # play!
             for agent in env.agent_iter():
-                observation, reward, terminated, truncated, _ = env.last()
+                observation, _, terminated, truncated, _ = env.last()
 
                 # get action
                 if terminated or truncated:
