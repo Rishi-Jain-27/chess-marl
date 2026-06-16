@@ -260,7 +260,7 @@ class Agent:
                 # Save permanently if elo is 100 greater than previous best elo
                 assert network_elo is not None # these asserts are so pylance doesn't go insane
                 assert best_elo is not None
-                if network_elo >= (best_elo + 100):
+                if network_elo >= best_elo:
                     self.save_model(network, network_elo)
                 
                 # Update best elo
