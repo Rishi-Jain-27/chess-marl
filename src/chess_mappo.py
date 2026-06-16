@@ -10,10 +10,11 @@ import chess.engine
 import torch
 import numpy as np
 import math
-from model_architectures.cnn import ActorCritic, compute_gae # change this to change what architecture we test!
+from model_architectures.hybrid import ActorCritic, compute_gae # change this to change what architecture we test!
 
 import yaml
 import itertools
+import random
 import os
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
@@ -450,6 +451,67 @@ class Agent:
             
             env.close()
 
+    def run_against_stockfish(self, elo):
+        # plays the model one game against stockfish depth=3 (elo 1000)
+        
+        # Creating stockfish engine
+        # Stockfish depth 3 == 1000 elo baseline
+        try:
+            # Initialize the engine
+            engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
+        except FileNotFoundError:
+            print(f"Stockfish not at {STOCKFISH_PATH}. Run 'brew install stockfish'")
+            return
+        
+        if random.random() > 0.5:
+            network_agent = "player_0"
+        else:
+            network_agent = "player_1"
+        
+        # Create env
+        env = chess_v6.env(render_mode="human")
+        env.reset()
+
+        # ditto network
+        agent = env.agent_selection
+        num_states = env.observation_space(agent)["observation"].shape # type: ignore
+        action_space = cast(Discrete, env.action_space(agent))
+        num_actions = action_space.n
+        network = ActorCritic(num_states, num_actions, hidden_dim=self.hidden_dim).to(device)
+
+        self.load_model(network, elo)
+
+        # Activate inference settings
+        network.eval()
+        with torch.inference_mode():
+            # play!
+            for agent in env.agent_iter():
+                observation, reward, terminated, truncated, _ = env.last()
+
+                # get action
+                if terminated or truncated:
+                    action = None
+                elif agent == network_agent: # network turn
+                    assert observation is not None
+                    mask = observation["action_mask"]
+
+                    logits, _ = network(torch.as_tensor(np.ascontiguousarray(observation["observation"]), dtype=torch.float32, device=device).unsqueeze(0), mask)
+                    action = int(torch.argmax(logits, dim=-1).item())
+                else: # stockfish turn
+                    board = unwrapped_env.board # type: ignore[attr-defined]
+                    player = 0 if board.turn == chess.WHITE else 1
+                    result = engine.play(board, chess.engine.Limit(depth=3))
+                    assert observation is not None
+                    for act in np.flatnonzero(observation["action_mask"]): # loop thru legal moves
+                        if chess_utils.action_to_move(board, int(act), player) == result.move:
+                            action = int(act)
+                            break
+                
+                env.step(action)
+            
+            engine.quit()
+            env.close()
+
     def save_graph(self, network_elos, network_elo_step_computed):
         fig = plt.figure(1)
         plt.xlabel('Steps')
@@ -465,7 +527,7 @@ class Agent:
     def load_model(self, network, elo):
         model_path = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}_ELO_{elo}.pt')
         try:
-            network.load_state_dict(torch.load(model_path, weights_only=True))
+            network.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device('cpu')))
         except:
             raise ValueError("Elo value must correspond to possible model elos.")
     
@@ -479,6 +541,7 @@ def main():
     parser = argparse.ArgumentParser(description="Train or run the chess bot?")
     parser.add_argument("hyperparameters", help="Enter the name of the set of hyperparameters to test/train")
     parser.add_argument("--train", help="Training mode", action="store_true")
+    parser.add_argument("--stockfish", help="If not '--train', run against Stockfish or yourself?", action="store_true")
     parser.add_argument("--elo", help="ELO value of the model to run.", type=int)
     args = parser.parse_args()
 
@@ -486,7 +549,9 @@ def main():
 
     if args.train:
         chess_bot.train()
-    else:
+    elif args.stockfish:
+        chess_bot.run_against_stockfish(elo=args.elo)
+    else: # if not training AND not against stockfish
         chess_bot.run(elo=args.elo)
 
 if __name__ == '__main__':
