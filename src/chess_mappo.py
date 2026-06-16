@@ -215,9 +215,9 @@ class Agent:
 
         # start collecting metrics
         num_steps = 0
+        num_steps_list = [num_steps]
         best_elo = float('-inf')
         network_elos = []
-        network_elo_step_computed = []
 
         # begin logging
         last_graph_update_time = datetime.now()
@@ -239,6 +239,7 @@ class Agent:
 
             # Metrics
             num_steps += len(actions)
+            num_steps_list.append(num_steps)
 
             if num_steps >= self.steps_per_save:
                 # Find network elo (logging happens in compute elo)
@@ -250,11 +251,10 @@ class Agent:
 
                 # Add that to list
                 network_elos.append(network_elo)
-                network_elo_step_computed.append(num_steps)
 
                 # Graph it
                 if datetime.now() - last_graph_update_time > timedelta(seconds=10):
-                    self.save_graph(network_elos, network_elo_step_computed)
+                    self.save_graph(network_elos, num_steps_list)
                     last_graph_update_time = datetime.now()
 
                 # Save permanently if elo is 100 greater than previous best elo
